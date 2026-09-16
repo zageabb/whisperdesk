@@ -2,11 +2,13 @@
 
 WhisperDesk is a local-first Flask web application for uploading audio/video files to an Ubuntu server and transcribing them with Faster-Whisper.
 
-**Current version: v0.1.0**
+**Current version: v0.1.1**
 
 ## What it does
 
 - Upload audio or video through a browser
+- Show the selected filename and size immediately
+- Upload with an in-page progress bar and clear error state
 - Queue transcription work so long jobs do not block the upload request
 - Run Faster-Whisper locally on the server
 - Automatically detect spoken language
@@ -164,13 +166,14 @@ http://SERVER-IP:5070/health
 ## First transcription
 
 1. Open WhisperDesk in a browser.
-2. Select an audio or video file.
-3. Click **Upload and transcribe**.
-4. The file is written to the persistent upload directory.
-5. The job is added to SQLite as `queued`.
-6. The background worker changes it to `processing` and lazily loads `large-v3`.
-7. The first use of a model may download model files into the normal local Hugging Face cache.
-8. When complete, download either the plain or timestamped transcript.
+2. Select or drop an audio/video file.
+3. WhisperDesk immediately shows the filename and file size and starts the upload.
+4. The page displays upload percentage and keeps the user on the same screen during transfer.
+5. When the server confirms the upload, the browser opens the new transcription job.
+6. The job is added to SQLite as `queued`.
+7. The background worker changes it to `processing` and lazily loads `large-v3`.
+8. The first use of a model may download model files into the normal local Hugging Face cache.
+9. When complete, download either the plain or timestamped transcript.
 
 ## Supported file extensions
 
@@ -207,7 +210,7 @@ Faster-Whisper uses PyAV for media decoding, so a separate system FFmpeg install
 
 ## Production / systemd
 
-WhisperDesk is designed to run with **one Gunicorn worker and multiple threads** in v0.1.0. The transcription queue is persisted in SQLite and serviced by the worker's background transcription thread.
+WhisperDesk is designed to run with **one Gunicorn worker and multiple threads** in v0.1.1. The transcription queue is persisted in SQLite and serviced by the worker's background transcription thread.
 
 A user-level systemd template is provided at:
 
@@ -278,4 +281,4 @@ Likely next stages:
 
 ## Security notes
 
-WhisperDesk v0.1.0 is designed primarily for a trusted local network. It validates upload extensions, uses generated stored filenames, and keeps runtime files outside the Git repository. If exposed beyond a trusted LAN, add authentication and HTTPS/reverse-proxy controls before use.
+WhisperDesk v0.1.1 is designed primarily for a trusted local network. It validates upload extensions, uses generated stored filenames, and keeps runtime files outside the Git repository. If exposed beyond a trusted LAN, add authentication and HTTPS/reverse-proxy controls before use.
