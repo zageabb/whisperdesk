@@ -30,7 +30,7 @@ def test_health(tmp_path):
     payload = response.get_json()
     assert payload["status"] == "ok"
     assert payload["app"] == "WhisperDesk"
-    assert payload["version"] == "0.1.1"
+    assert payload["version"] == "0.2.0"
     assert payload["jobs"]["queued"] == 0
 
 
@@ -107,3 +107,68 @@ def test_async_rejects_unsupported_extension(tmp_path):
     payload = response.get_json()
     assert payload["ok"] is False
     assert "Unsupported file type" in payload["error"]
+
+
+def test_job_api_exposes_transcription_progress(tmp_path):
+    app = make_app(tmp_path)
+    client = app.test_client()
+    client.post(
+        "/upload",
+        data={"file": (io.BytesIO(b"fake audio"), "meeting.mp3")},
+        content_type="multipart/form-data",
+    )
+
+    with app.app_context():
+        from app import db
+
+        job = db.list_jobs()[0]
+        partial = tmp_path / "data" / "transcripts" / "meeting.partial.txt"
+        partial.write_text("Partial transcript\n", encoding="utf-8")
+        db.update_progress(
+            app.config["DATABASE_PATH"],
+            job["id"],
+            language="en",
+            duration_seconds=120.0,
+            progress_seconds=30.0,
+            partial_transcript_path=str(partial),
+            partial_timestamped_path=str(partial),
+        )
+        job_id = job["id"]
+
+    payload = client.get(f"/api/jobs/{job_id}").get_json()
+    assert payload["progress_seconds"] == 30.0
+    assert payload["duration_seconds"] == 120.0
+    assert payload["partial_transcript_path"] == str(partial)
+
+    response = client.get(f"/download/{job_id}/partial-transcript")
+    assert response.status_code == 200
+    assert response.data == b"Partial transcript\n"
+
+
+def test_segments_api_returns_recent_timestamped_lines(tmp_path):
+    app = make_app(tmp_path)
+    client = app.test_client()
+    client.post(
+        "/upload",
+        data={"file": (io.BytesIO(b"fake audio"), "meeting.mp3")},
+        content_type="multipart/form-data",
+    )
+    with app.app_context():
+        from app import db
+
+        job = db.list_jobs()[0]
+        partial = tmp_path / "data" / "transcripts" / "meeting.partial.txt"
+        partial.write_text(
+            "WhisperDesk transcript\n\n[00:00:00.000 --> 00:00:03.000] Hello\n",
+            encoding="utf-8",
+        )
+        db.update_progress(
+            app.config["DATABASE_PATH"], job["id"], language="en",
+            duration_seconds=60.0, progress_seconds=3.0,
+            partial_transcript_path=str(partial),
+            partial_timestamped_path=str(partial),
+        )
+        job_id = job["id"]
+
+    payload = client.get(f"/api/jobs/{job_id}/segments").get_json()
+    assert payload["segments"] == ["[00:00:00.000 --> 00:00:03.000] Hello"]

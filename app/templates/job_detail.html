@@ -28,8 +28,21 @@
         <div class="spinner"></div>
         <div>
             <strong id="processing-title">{% if job.status == 'queued' %}Waiting for transcription worker{% else %}Transcribing locally{% endif %}</strong>
-            <p>This page will update automatically when the transcript is ready.</p>
+            <p id="progress-label">{% if job.progress_seconds and job.duration_seconds %}{{ '%.1f'|format(job.progress_seconds / 60) }} of {{ '%.1f'|format(job.duration_seconds / 60) }} min{% else %}This page will update automatically as segments are transcribed.{% endif %}</p>
+            <div class="transcription-progress"><div id="transcription-progress-bar" style="width: {% if job.progress_seconds and job.duration_seconds %}{{ [100, (job.progress_seconds / job.duration_seconds * 100)]|min }}{% else %}0{% endif %}%"></div></div>
+            <div id="partial-links" class="partial-links {% if not job.partial_transcript_path %}hidden{% endif %}">
+                <a href="{{ url_for('web.download', job_id=job.id, kind='partial-transcript') }}">Download partial transcript</a>
+                <a href="{{ url_for('web.download', job_id=job.id, kind='partial-timestamped') }}">Download timestamped partial</a>
+            </div>
         </div>
+    </div>
+
+    <div id="live-segments-block" class="live-segments {% if job.status != 'processing' %}hidden{% endif %}">
+        <div class="row-between gap">
+            <strong>Latest completed segments</strong>
+            <span>Live · newest at bottom</span>
+        </div>
+        <pre id="live-segments">Waiting for the first segment…</pre>
     </div>
 
     <div id="download-block" class="download-grid {% if job.status != 'completed' %}hidden{% endif %}">
@@ -70,13 +83,21 @@ function applyJob(job) {
     badge.className = `badge ${job.status} large`;
     document.getElementById('job-language').textContent = job.language || (job.status === 'processing' ? 'Detecting…' : '—');
     document.getElementById('job-duration').textContent = formatDuration(job.duration_seconds);
+    const progress = job.duration_seconds ? Math.min(100, (job.progress_seconds || 0) / job.duration_seconds * 100) : 0;
+    document.getElementById('transcription-progress-bar').style.width = `${progress}%`;
+    document.getElementById('progress-label').textContent = job.duration_seconds
+        ? `${((job.progress_seconds || 0) / 60).toFixed(1)} of ${(job.duration_seconds / 60).toFixed(1)} min (${progress.toFixed(0)}%)`
+        : 'Preparing audio…';
+    document.getElementById('partial-links').classList.toggle('hidden', !job.partial_transcript_path);
 
     const processing = document.getElementById('processing-block');
     const downloads = document.getElementById('download-block');
     const error = document.getElementById('error-block');
+    const liveSegments = document.getElementById('live-segments-block');
     processing.classList.toggle('hidden', !['queued', 'processing'].includes(job.status));
     downloads.classList.toggle('hidden', job.status !== 'completed');
     error.classList.toggle('hidden', job.status !== 'failed');
+    liveSegments.classList.toggle('hidden', job.status !== 'processing');
 
     if (job.status === 'queued') {
         document.getElementById('processing-title').textContent = 'Waiting for transcription worker';
@@ -86,11 +107,28 @@ function applyJob(job) {
     if (job.error) document.getElementById('job-error').textContent = job.error;
 }
 
+async function updateSegments() {
+    if (status !== 'processing') return;
+    try {
+        const response = await fetch(`/api/jobs/${jobId}/segments`, {cache: 'no-store'});
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (payload.segments.length) {
+            const preview = document.getElementById('live-segments');
+            preview.textContent = payload.segments.join('\n');
+            preview.scrollTop = preview.scrollHeight;
+        }
+    } catch (_) {}
+}
+
 async function poll() {
     if (!['queued', 'processing'].includes(status)) return;
     try {
         const response = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
-        if (response.ok) applyJob(await response.json());
+        if (response.ok) {
+            applyJob(await response.json());
+            await updateSegments();
+        }
     } catch (_) {}
     if (['queued', 'processing'].includes(status)) setTimeout(poll, 2500);
 }

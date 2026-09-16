@@ -11,7 +11,7 @@ from .config import Config
 from .transcriber import start_worker
 
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 
 def create_app(test_config: dict | None = None) -> Flask:

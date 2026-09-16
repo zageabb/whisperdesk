@@ -48,14 +48,28 @@ def init_schema(path: str | Path) -> None:
                 model TEXT NOT NULL,
                 language TEXT,
                 duration_seconds REAL,
+                progress_seconds REAL NOT NULL DEFAULT 0,
                 transcript_path TEXT,
                 timestamped_path TEXT,
+                partial_transcript_path TEXT,
+                partial_timestamped_path TEXT,
                 error TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_jobs_status_created
                 ON jobs(status, created_at);
             """
         )
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
+        }
+        migrations = {
+            "progress_seconds": "REAL NOT NULL DEFAULT 0",
+            "partial_transcript_path": "TEXT",
+            "partial_timestamped_path": "TEXT",
+        }
+        for name, definition in migrations.items():
+            if name not in columns:
+                conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {definition}")
         conn.commit()
     finally:
         conn.close()
@@ -106,7 +120,7 @@ def recover_interrupted_jobs(path: str | Path) -> None:
         conn.execute(
             """
             UPDATE jobs
-               SET status = 'queued', started_at = NULL,
+               SET status = 'queued',
                    error = 'Recovered after application restart'
              WHERE status = 'processing'
             """
@@ -148,6 +162,43 @@ def claim_next_job(path: str | Path) -> dict[str, Any] | None:
         conn.close()
 
 
+def update_progress(
+    path: str | Path,
+    job_id: str,
+    *,
+    language: str | None,
+    duration_seconds: float | None,
+    progress_seconds: float,
+    partial_transcript_path: str,
+    partial_timestamped_path: str,
+) -> None:
+    conn = connect(path)
+    try:
+        conn.execute(
+            """
+            UPDATE jobs
+               SET language = COALESCE(?, language),
+                   duration_seconds = COALESCE(?, duration_seconds),
+                   progress_seconds = ?,
+                   partial_transcript_path = ?,
+                   partial_timestamped_path = ?,
+                   error = NULL
+             WHERE id = ?
+            """,
+            (
+                language,
+                duration_seconds,
+                progress_seconds,
+                partial_transcript_path,
+                partial_timestamped_path,
+                job_id,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def complete_job(
     path: str | Path,
     job_id: str,
@@ -164,6 +215,9 @@ def complete_job(
             UPDATE jobs
                SET status = 'completed', completed_at = ?, language = ?,
                    duration_seconds = ?, transcript_path = ?, timestamped_path = ?,
+                   progress_seconds = COALESCE(?, progress_seconds),
+                   partial_transcript_path = NULL,
+                   partial_timestamped_path = NULL,
                    error = NULL
              WHERE id = ?
             """,
@@ -173,6 +227,7 @@ def complete_job(
                 duration_seconds,
                 transcript_path,
                 timestamped_path,
+                duration_seconds,
                 job_id,
             ),
         )

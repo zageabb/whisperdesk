@@ -126,6 +126,24 @@ def job_status(job_id: str):
     return jsonify(serialize_job(job))
 
 
+@bp.get("/api/jobs/<job_id>/segments")
+def job_segments(job_id: str):
+    job = db.get_job(job_id)
+    if job is None:
+        return jsonify({"error": "not found"}), 404
+
+    path_value = job["partial_timestamped_path"] or job["timestamped_path"]
+    if not path_value:
+        return jsonify({"segments": []})
+    path = Path(path_value)
+    if not path.exists():
+        return jsonify({"segments": []})
+
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    segments = [line for line in lines if line.startswith("[")]
+    return jsonify({"segments": segments[-20:]})
+
+
 @bp.get("/download/<job_id>/<kind>")
 def download(job_id: str, kind: str):
     job = db.get_job(job_id)
@@ -135,6 +153,8 @@ def download(job_id: str, kind: str):
     column = {
         "transcript": "transcript_path",
         "timestamped": "timestamped_path",
+        "partial-transcript": "partial_transcript_path",
+        "partial-timestamped": "partial_timestamped_path",
     }.get(kind)
     if column is None:
         abort(404)
@@ -147,7 +167,9 @@ def download(job_id: str, kind: str):
         abort(404)
 
     stem = secure_filename(Path(job["original_name"]).stem) or "transcript"
-    suffix = "transcript" if kind == "transcript" else "timestamped"
+    suffix = "transcript" if "transcript" == kind or kind == "partial-transcript" else "timestamped"
+    if kind.startswith("partial-"):
+        suffix += "_partial"
     return send_file(
         path,
         as_attachment=True,

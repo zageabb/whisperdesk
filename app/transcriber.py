@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from pathlib import Path
@@ -64,45 +65,75 @@ class TranscriptionWorker(threading.Thread):
             if not source.exists():
                 raise FileNotFoundError(f"Uploaded file no longer exists: {source}")
 
-            model = self.get_model()
-            segments, info = model.transcribe(
-                str(source),
-                beam_size=self.config["WHISPER_BEAM_SIZE"],
-                vad_filter=self.config["WHISPER_VAD_FILTER"],
-                word_timestamps=self.config["WHISPER_WORD_TIMESTAMPS"],
-            )
-
-            plain_lines: list[str] = []
-            timestamped_lines: list[str] = []
-            for segment in segments:
-                text = segment.text.strip()
-                if not text:
-                    continue
-                plain_lines.append(text)
-                timestamped_lines.append(
-                    f"[{format_timestamp(segment.start)} --> "
-                    f"{format_timestamp(segment.end)}] {text}"
-                )
-
             self.transcript_dir.mkdir(parents=True, exist_ok=True)
             safe_stem = source.stem.rsplit("_", 1)[0] or "transcript"
             plain_path = self.transcript_dir / f"{safe_stem}_{job_id}_transcript.txt"
-            timestamped_path = (
-                self.transcript_dir / f"{safe_stem}_{job_id}_timestamped.txt"
-            )
+            timestamped_path = self.transcript_dir / f"{safe_stem}_{job_id}_timestamped.txt"
+            partial_plain_path = plain_path.with_suffix(".partial.txt")
+            partial_timestamped_path = timestamped_path.with_suffix(".partial.txt")
+            resume_at = max(float(job.get("progress_seconds") or 0), 0.0)
 
+            model = self.get_model()
+            segments, info = model.transcribe(
+                str(source),
+                language=job.get("language"),
+                beam_size=self.config["WHISPER_BEAM_SIZE"],
+                vad_filter=self.config["WHISPER_VAD_FILTER"],
+                word_timestamps=self.config["WHISPER_WORD_TIMESTAMPS"],
+                clip_timestamps=[max(0.0, resume_at - 1.0)],
+            )
+            duration = getattr(info, "duration", None)
+            language = getattr(info, "language", None)
             header = (
                 f"WhisperDesk transcript\n"
                 f"Source: {job['original_name']}\n"
                 f"Model: {job['model']}\n"
-                f"Language: {getattr(info, 'language', 'unknown')}\n\n"
+                f"Language: {language or 'unknown'}\n\n"
             )
-            plain_path.write_text(header + "\n".join(plain_lines) + "\n", encoding="utf-8")
-            timestamped_path.write_text(
-                header + "\n".join(timestamped_lines) + "\n", encoding="utf-8"
+            if resume_at <= 0 or not partial_plain_path.exists():
+                partial_plain_path.write_text(header, encoding="utf-8")
+                partial_timestamped_path.write_text(header, encoding="utf-8")
+                resume_at = 0.0
+
+            db.update_progress(
+                self.database_path,
+                job_id,
+                language=language,
+                duration_seconds=float(duration) if duration is not None else None,
+                progress_seconds=resume_at,
+                partial_transcript_path=str(partial_plain_path),
+                partial_timestamped_path=str(partial_timestamped_path),
             )
 
-            duration = getattr(info, "duration", None)
+            with partial_plain_path.open("a", encoding="utf-8") as plain_file, partial_timestamped_path.open(
+                "a", encoding="utf-8"
+            ) as timestamped_file:
+                for segment in segments:
+                    if float(segment.end) <= resume_at:
+                        continue
+                    text = segment.text.strip()
+                    if not text:
+                        continue
+                    plain_file.write(text + "\n")
+                    timestamped_file.write(
+                        f"[{format_timestamp(segment.start)} --> "
+                        f"{format_timestamp(segment.end)}] {text}\n"
+                    )
+                    plain_file.flush()
+                    timestamped_file.flush()
+                    progress = float(segment.end)
+                    db.update_progress(
+                        self.database_path,
+                        job_id,
+                        language=language,
+                        duration_seconds=float(duration) if duration is not None else None,
+                        progress_seconds=progress,
+                        partial_transcript_path=str(partial_plain_path),
+                        partial_timestamped_path=str(partial_timestamped_path),
+                    )
+
+            os.replace(partial_plain_path, plain_path)
+            os.replace(partial_timestamped_path, timestamped_path)
             db.complete_job(
                 self.database_path,
                 job_id,

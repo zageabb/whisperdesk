@@ -2,7 +2,7 @@
 
 WhisperDesk is a local-first Flask web application for uploading audio/video files to an Ubuntu server and transcribing them with Faster-Whisper.
 
-**Current version: v0.1.1**
+**Current version: v0.2.0**
 
 ## What it does
 
@@ -11,6 +11,8 @@ WhisperDesk is a local-first Flask web application for uploading audio/video fil
 - Upload with an in-page progress bar and clear error state
 - Queue transcription work so long jobs do not block the upload request
 - Run Faster-Whisper locally on the server
+- Show live transcription progress and allow partial transcript downloads
+- Save a checkpoint after every segment and resume interrupted work
 - Automatically detect spoken language
 - Use VAD filtering to reduce silence
 - Generate a clean UTF-8 transcript
@@ -210,7 +212,7 @@ Faster-Whisper uses PyAV for media decoding, so a separate system FFmpeg install
 
 ## Production / systemd
 
-WhisperDesk is designed to run with **one Gunicorn worker and multiple threads** in v0.1.1. The transcription queue is persisted in SQLite and serviced by the worker's background transcription thread.
+WhisperDesk is designed to run with **one Gunicorn worker and multiple threads**. The transcription queue and per-segment checkpoints are persisted in SQLite and serviced by the worker's background transcription thread.
 
 A user-level systemd template is provided at:
 
