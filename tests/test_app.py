@@ -30,7 +30,7 @@ def test_health(tmp_path):
     payload = response.get_json()
     assert payload["status"] == "ok"
     assert payload["app"] == "WhisperDesk"
-    assert payload["version"] == "0.1.0"
+    assert payload["version"] == "0.1.1"
     assert payload["jobs"]["queued"] == 0
 
 
@@ -58,6 +58,25 @@ def test_upload_creates_queued_job(tmp_path):
         assert jobs[0]["status"] == "queued"
 
 
+def test_async_upload_returns_job_url(tmp_path):
+    app = make_app(tmp_path)
+    client = app.test_client()
+
+    response = client.post(
+        "/upload",
+        data={"file": (io.BytesIO(b"fake audio"), "meeting.mp3")},
+        content_type="multipart/form-data",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+
+    assert response.status_code == 201
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["filename"] == "meeting.mp3"
+    assert payload["job_id"]
+    assert payload["redirect_url"].endswith(payload["job_id"])
+
+
 def test_rejects_unsupported_extension(tmp_path):
     app = make_app(tmp_path)
     client = app.test_client()
@@ -71,3 +90,20 @@ def test_rejects_unsupported_extension(tmp_path):
 
     assert response.status_code == 200
     assert b"Unsupported file type" in response.data
+
+
+def test_async_rejects_unsupported_extension(tmp_path):
+    app = make_app(tmp_path)
+    client = app.test_client()
+
+    response = client.post(
+        "/upload",
+        data={"file": (io.BytesIO(b"not media"), "notes.txt")},
+        content_type="multipart/form-data",
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Unsupported file type" in payload["error"]
