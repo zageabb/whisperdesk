@@ -1,0 +1,15 @@
+[Unit]
+Description=WhisperDesk local transcription service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/whisperdesk
+EnvironmentFile=-%h/whisperdesk/.env
+ExecStart=%h/whisperdesk/start.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
