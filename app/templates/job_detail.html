@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}{{ job.original_name }} · WhisperDesk{% endblock %}
+{% block heading %}Transcription{% endblock %}
+{% block subtitle %}{{ job.original_name }}{% endblock %}
+
+{% block topbar_actions %}
+<a class="button secondary" href="{{ url_for('web.jobs') }}">Back to jobs</a>
+{% endblock %}
+
+{% block content %}
+<div id="job-card" class="panel job-panel" data-job-id="{{ job.id }}" data-status="{{ job.status }}">
+    <div class="row-between gap">
+        <div>
+            <div class="eyebrow">Job {{ job.id }}</div>
+            <h2>{{ job.original_name }}</h2>
+        </div>
+        <span id="job-status" class="badge {{ job.status }} large">{{ job.status }}</span>
+    </div>
+
+    <div class="metadata-grid">
+        <div><span>Model</span><strong>{{ job.model }}</strong></div>
+        <div><span>Language</span><strong id="job-language">{{ job.language or 'Detecting…' if job.status == 'processing' else '—' }}</strong></div>
+        <div><span>Duration</span><strong id="job-duration">{% if job.duration_seconds %}{{ '%.1f'|format(job.duration_seconds / 60) }} min{% else %}—{% endif %}</strong></div>
+        <div><span>Created</span><strong>{{ job.created_at[:19].replace('T', ' ') }}</strong></div>
+    </div>
+
+    <div id="processing-block" class="processing-block {% if job.status not in ['queued','processing'] %}hidden{% endif %}">
+        <div class="spinner"></div>
+        <div>
+            <strong id="processing-title">{% if job.status == 'queued' %}Waiting for transcription worker{% else %}Transcribing locally{% endif %}</strong>
+            <p>This page will update automatically when the transcript is ready.</p>
+        </div>
+    </div>
+
+    <div id="download-block" class="download-grid {% if job.status != 'completed' %}hidden{% endif %}">
+        <a class="download-card" href="{{ url_for('web.download', job_id=job.id, kind='transcript') }}">
+            <strong>Plain transcript</strong>
+            <span>Clean UTF-8 text without timestamps</span>
+            <b>Download TXT →</b>
+        </a>
+        <a class="download-card" href="{{ url_for('web.download', job_id=job.id, kind='timestamped') }}">
+            <strong>Timestamped transcript</strong>
+            <span>Segment timestamps for reference and evidence</span>
+            <b>Download TXT →</b>
+        </a>
+    </div>
+
+    <div id="error-block" class="error-box {% if job.status != 'failed' %}hidden{% endif %}">
+        <strong>Transcription failed</strong>
+        <pre id="job-error">{{ job.error or 'Unknown transcription error.' }}</pre>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const card = document.getElementById('job-card');
+const jobId = card.dataset.jobId;
+let status = card.dataset.status;
+
+function formatDuration(seconds) {
+    if (!seconds) return '—';
+    return `${(seconds / 60).toFixed(1)} min`;
+}
+
+function applyJob(job) {
+    status = job.status;
+    const badge = document.getElementById('job-status');
+    badge.textContent = job.status;
+    badge.className = `badge ${job.status} large`;
+    document.getElementById('job-language').textContent = job.language || (job.status === 'processing' ? 'Detecting…' : '—');
+    document.getElementById('job-duration').textContent = formatDuration(job.duration_seconds);
+
+    const processing = document.getElementById('processing-block');
+    const downloads = document.getElementById('download-block');
+    const error = document.getElementById('error-block');
+    processing.classList.toggle('hidden', !['queued', 'processing'].includes(job.status));
+    downloads.classList.toggle('hidden', job.status !== 'completed');
+    error.classList.toggle('hidden', job.status !== 'failed');
+
+    if (job.status === 'queued') {
+        document.getElementById('processing-title').textContent = 'Waiting for transcription worker';
+    } else if (job.status === 'processing') {
+        document.getElementById('processing-title').textContent = 'Transcribing locally';
+    }
+    if (job.error) document.getElementById('job-error').textContent = job.error;
+}
+
+async function poll() {
+    if (!['queued', 'processing'].includes(status)) return;
+    try {
+        const response = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
+        if (response.ok) applyJob(await response.json());
+    } catch (_) {}
+    if (['queued', 'processing'].includes(status)) setTimeout(poll, 2500);
+}
+poll();
+</script>
+{% endblock %}
