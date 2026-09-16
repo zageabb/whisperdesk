@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Transcriptions · WhisperDesk{% endblock %}
+{% block heading %}Transcriptions{% endblock %}
+{% block subtitle %}Review queued, active and completed transcription jobs.{% endblock %}
+
+{% block content %}
+<section class="panel">
+    {% if jobs %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>File</th><th>Status</th><th>Language</th><th>Duration</th><th>Model</th><th>Created</th><th></th></tr>
+            </thead>
+            <tbody>
+            {% for job in jobs %}
+                <tr>
+                    <td class="file-cell">{{ job.original_name }}</td>
+                    <td><span class="badge {{ job.status }}">{{ job.status }}</span></td>
+                    <td>{{ job.language or '—' }}</td>
+                    <td>{% if job.duration_seconds %}{{ '%.1f'|format(job.duration_seconds / 60) }} min{% else %}—{% endif %}</td>
+                    <td>{{ job.model }}</td>
+                    <td>{{ job.created_at[:19].replace('T', ' ') }}</td>
+                    <td><a href="{{ url_for('web.job_detail', job_id=job.id) }}">Open</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <div class="empty-state">No transcription jobs have been created yet.</div>
+    {% endif %}
+</section>
+{% endblock %}
