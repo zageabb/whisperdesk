@@ -16,18 +16,37 @@
         <div class="panel-heading">
             <div>
                 <h2>New transcription</h2>
-                <p>Files stay on this server and are processed locally by Faster-Whisper.</p>
+                <p>Choose a file and WhisperDesk will upload it immediately, then queue it for local transcription.</p>
             </div>
         </div>
-        <form method="post" action="{{ url_for('web.upload') }}" enctype="multipart/form-data" class="upload-form">
-            <label class="dropzone" for="file-input">
+        <form id="upload-form" method="post" action="{{ url_for('web.upload') }}" enctype="multipart/form-data" class="upload-form">
+            <label id="dropzone" class="dropzone" for="file-input">
                 <div class="drop-icon">↑</div>
-                <strong>Select an audio or video file</strong>
+                <strong>Choose or drop an audio/video file</strong>
                 <span>MP3, WAV, M4A, MP4, MOV, MKV, WebM, FLAC, OGG and more</span>
-                <input id="file-input" name="file" type="file" required>
+                <input id="file-input" name="file" type="file" accept="audio/*,video/*,.m4a,.mkv,.flac,.ogg,.opus,.aac" required>
             </label>
-            <div id="selected-file" class="selected-file">No file selected</div>
-            <button class="button primary" type="submit">Upload and transcribe</button>
+
+            <div id="selected-card" class="selected-card hidden" aria-live="polite">
+                <div>
+                    <span class="selected-label">Selected file</span>
+                    <strong id="selected-name">—</strong>
+                    <small id="selected-size">—</small>
+                </div>
+                <span id="selected-status" class="upload-state">Preparing…</span>
+            </div>
+
+            <div id="upload-progress" class="upload-progress hidden" aria-live="polite">
+                <div class="progress-row">
+                    <strong id="upload-progress-label">Uploading…</strong>
+                    <span id="upload-progress-percent">0%</span>
+                </div>
+                <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+                <p id="upload-message">Keep this page open while the file is transferred to WhisperDesk.</p>
+            </div>
+
+            <div id="upload-error" class="error-box hidden"></div>
+            <button id="upload-button" class="button primary" type="submit">Upload and transcribe</button>
         </form>
     </section>
 
@@ -82,10 +101,141 @@
 
 {% block scripts %}
 <script>
-const input = document.getElementById('file-input');
-const selected = document.getElementById('selected-file');
-input?.addEventListener('change', () => {
-    selected.textContent = input.files.length ? input.files[0].name : 'No file selected';
-});
+(() => {
+    const form = document.getElementById('upload-form');
+    const input = document.getElementById('file-input');
+    const dropzone = document.getElementById('dropzone');
+    const selectedCard = document.getElementById('selected-card');
+    const selectedName = document.getElementById('selected-name');
+    const selectedSize = document.getElementById('selected-size');
+    const selectedStatus = document.getElementById('selected-status');
+    const progress = document.getElementById('upload-progress');
+    const progressBar = document.getElementById('progress-bar');
+    const progressPercent = document.getElementById('upload-progress-percent');
+    const progressLabel = document.getElementById('upload-progress-label');
+    const uploadMessage = document.getElementById('upload-message');
+    const errorBox = document.getElementById('upload-error');
+    const uploadButton = document.getElementById('upload-button');
+    let activeFile = null;
+    let uploading = false;
+
+    function readableSize(bytes) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+        return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+    }
+
+    function showFile(file) {
+        activeFile = file;
+        selectedName.textContent = file.name;
+        selectedSize.textContent = readableSize(file.size);
+        selectedStatus.textContent = 'Ready to upload';
+        selectedCard.classList.remove('hidden');
+        errorBox.classList.add('hidden');
+    }
+
+    function showError(message) {
+        uploading = false;
+        selectedStatus.textContent = 'Upload failed';
+        errorBox.textContent = message || 'The upload failed. Please try again.';
+        errorBox.classList.remove('hidden');
+        uploadButton.disabled = false;
+        uploadButton.textContent = 'Try upload again';
+        progressLabel.textContent = 'Upload failed';
+        uploadMessage.textContent = 'The file was not queued for transcription.';
+    }
+
+    function uploadFile(file) {
+        if (!file || uploading) return;
+        showFile(file);
+        uploading = true;
+        selectedStatus.textContent = 'Uploading…';
+        progress.classList.remove('hidden');
+        errorBox.classList.add('hidden');
+        uploadButton.disabled = true;
+        uploadButton.textContent = 'Uploading…';
+        progressBar.style.width = '0%';
+        progressPercent.textContent = '0%';
+        progressLabel.textContent = 'Uploading to WhisperDesk';
+        uploadMessage.textContent = 'Keep this page open while the file is transferred to the server.';
+
+        const data = new FormData();
+        data.append('file', file, file.name);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', form.action, true);
+        xhr.responseType = 'json';
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+        xhr.upload.addEventListener('progress', (event) => {
+            if (!event.lengthComputable) return;
+            const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+            progressBar.style.width = `${percent}%`;
+            progressPercent.textContent = `${percent}%`;
+            selectedStatus.textContent = `${percent}% uploaded`;
+            if (percent >= 100) {
+                progressLabel.textContent = 'Upload received';
+                uploadMessage.textContent = 'Creating the transcription job…';
+            }
+        });
+
+        xhr.addEventListener('load', () => {
+            const response = xhr.response || {};
+            if (xhr.status >= 200 && xhr.status < 300 && response.ok && response.redirect_url) {
+                progressBar.style.width = '100%';
+                progressPercent.textContent = '100%';
+                selectedStatus.textContent = 'Queued';
+                progressLabel.textContent = 'Upload complete';
+                uploadMessage.textContent = 'Opening the transcription job…';
+                window.location.assign(response.redirect_url);
+                return;
+            }
+            showError(response.error || `Upload failed with HTTP ${xhr.status}.`);
+        });
+
+        xhr.addEventListener('error', () => {
+            showError('The browser lost its connection to WhisperDesk while uploading the file.');
+        });
+
+        xhr.addEventListener('abort', () => {
+            showError('The upload was cancelled.');
+        });
+
+        xhr.send(data);
+    }
+
+    input.addEventListener('change', () => {
+        if (!input.files || !input.files.length) return;
+        uploadFile(input.files[0]);
+    });
+
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const file = activeFile || (input.files && input.files[0]);
+        if (file) uploadFile(file);
+    });
+
+    ['dragenter', 'dragover'].forEach((name) => {
+        dropzone.addEventListener(name, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            dropzone.classList.add('drag-active');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach((name) => {
+        dropzone.addEventListener(name, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            dropzone.classList.remove('drag-active');
+        });
+    });
+
+    dropzone.addEventListener('drop', (event) => {
+        const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+        if (file) uploadFile(file);
+    });
+})();
 </script>
 {% endblock %}
