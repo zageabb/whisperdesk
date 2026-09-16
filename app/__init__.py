@@ -4,14 +4,14 @@ import logging
 import os
 from pathlib import Path
 
-from flask import Flask, flash, redirect, request, url_for
+from flask import Flask, flash, jsonify, redirect, request, url_for
 
 from . import db
 from .config import Config
 from .transcriber import start_worker
 
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -40,7 +40,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.errorhandler(413)
     def too_large(_error):
         max_mb = app.config["MAX_CONTENT_LENGTH"] // 1024 // 1024
-        flash(f"The selected file is larger than the {max_mb} MB upload limit.", "error")
+        message = f"The selected file is larger than the {max_mb} MB upload limit."
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"ok": False, "error": message}), 413
+        flash(message, "error")
         return redirect(request.referrer or url_for("web.index"))
 
     @app.context_processor
