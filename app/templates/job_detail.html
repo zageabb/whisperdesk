@@ -19,7 +19,7 @@
 
     <div class="metadata-grid">
         <div><span>Model</span><strong>{{ job.model }}</strong></div>
-        <div><span>Language</span><strong id="job-language">{{ job.language or 'Detecting…' if job.status == 'processing' else '—' }}</strong></div>
+        <div><span>Language</span><strong id="job-language">{% if job.language %}{{ job.language }}{% elif job.status == 'processing' %}Detecting…{% else %}—{% endif %}</strong></div>
         <div><span>Duration</span><strong id="job-duration">{% if job.duration_seconds %}{{ '%.1f'|format(job.duration_seconds / 60) }} min{% else %}—{% endif %}</strong></div>
         <div><span>Created</span><strong>{{ job.created_at[:19].replace('T', ' ') }}</strong></div>
     </div>
