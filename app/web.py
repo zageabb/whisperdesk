@@ -35,6 +35,17 @@ def serialize_job(job) -> dict:
     return {key: job[key] for key in job.keys()}
 
 
+def is_async_upload() -> bool:
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
+def upload_error(message: str, status: int = 400):
+    if is_async_upload():
+        return jsonify({"ok": False, "error": message}), status
+    flash(message, "error")
+    return redirect(url_for("web.index"))
+
+
 @bp.get("/")
 def index():
     return render_template(
@@ -47,18 +58,15 @@ def index():
 @bp.post("/upload")
 def upload():
     if "file" not in request.files:
-        flash("Choose an audio or video file to upload.", "error")
-        return redirect(url_for("web.index"))
+        return upload_error("Choose an audio or video file to upload.")
 
     uploaded = request.files["file"]
     if not uploaded.filename:
-        flash("Choose an audio or video file to upload.", "error")
-        return redirect(url_for("web.index"))
+        return upload_error("Choose an audio or video file to upload.")
 
     if not allowed_file(uploaded.filename):
         extensions = ", ".join(sorted(current_app.config["ALLOWED_EXTENSIONS"]))
-        flash(f"Unsupported file type. Allowed: {extensions}", "error")
-        return redirect(url_for("web.index"))
+        return upload_error(f"Unsupported file type. Allowed: {extensions}")
 
     original_name = Path(uploaded.filename).name
     safe_name = secure_filename(original_name) or "audio"
@@ -66,7 +74,12 @@ def upload():
     job_id = uuid.uuid4().hex[:12]
     stored_name = f"{path.stem}_{job_id}{path.suffix.lower()}"
     stored_path = Path(current_app.config["UPLOAD_DIR"]) / stored_name
-    uploaded.save(stored_path)
+
+    try:
+        uploaded.save(stored_path)
+    except OSError as exc:
+        current_app.logger.exception("Unable to save upload %s", original_name)
+        return upload_error(f"Unable to save the uploaded file: {exc}", 500)
 
     db.create_job(
         {
@@ -76,8 +89,20 @@ def upload():
             "model": current_app.config["WHISPER_MODEL"],
         }
     )
+
+    redirect_url = url_for("web.job_detail", job_id=job_id)
+    if is_async_upload():
+        return jsonify(
+            {
+                "ok": True,
+                "job_id": job_id,
+                "filename": original_name,
+                "redirect_url": redirect_url,
+            }
+        ), 201
+
     flash(f"{original_name} has been queued for transcription.", "success")
-    return redirect(url_for("web.job_detail", job_id=job_id))
+    return redirect(redirect_url)
 
 
 @bp.get("/jobs")
@@ -137,7 +162,7 @@ def settings():
     return render_template(
         "settings.html",
         settings={
-            "Version": current_app.config.get("APP_VERSION", "0.1.0"),
+            "Version": current_app.config.get("APP_VERSION", "0.1.1"),
             "Whisper model": config["WHISPER_MODEL"],
             "Device": config["WHISPER_DEVICE"],
             "Compute type": config["WHISPER_COMPUTE_TYPE"],
@@ -158,7 +183,7 @@ def health():
         {
             "status": "ok",
             "app": "WhisperDesk",
-            "version": current_app.config.get("APP_VERSION", "0.1.0"),
+            "version": current_app.config.get("APP_VERSION", "0.1.1"),
             "model": current_app.config["WHISPER_MODEL"],
             "device": current_app.config["WHISPER_DEVICE"],
             "jobs": counts,
