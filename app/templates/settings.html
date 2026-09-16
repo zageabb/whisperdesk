@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Settings · WhisperDesk{% endblock %}
+{% block heading %}Settings{% endblock %}
+{% block subtitle %}Current local transcription configuration.{% endblock %}
+
+{% block content %}
+<section class="panel">
+    <div class="panel-heading">
+        <div>
+            <h2>Runtime configuration</h2>
+            <p>These values come from the server environment. Change them in <code>.env</code> and restart WhisperDesk.</p>
+        </div>
+    </div>
+    <div class="settings-list">
+        {% for key, value in settings.items() %}
+        <div class="setting-row">
+            <span>{{ key }}</span>
+            <code>{{ value }}</code>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="panel note-panel">
+    <h2>Processing model</h2>
+    <p>WhisperDesk transcribes files with Faster-Whisper. Ollama is deliberately separate in v{{ app_version }} so the source transcript remains an independent record before any LLM summarisation or reasoning is added.</p>
+</section>
+{% endblock %}
