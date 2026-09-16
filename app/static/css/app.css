@@ -58,13 +58,25 @@ button, input { font: inherit; }
 
 .upload-form { display: grid; gap: 12px; }
 .dropzone { min-height: 220px; border: 2px dashed #aebfd0; background: #f8fbfe; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; padding: 24px; text-align: center; cursor: pointer; transition: .15s ease; }
-.dropzone:hover { border-color: var(--primary); background: #f2f8fd; }
-.dropzone input { position: absolute; opacity: 0; pointer-events: none; }
+.dropzone:hover, .dropzone.drag-active { border-color: var(--primary); background: #f2f8fd; box-shadow: inset 0 0 0 1px rgba(23, 105, 170, .08); }
+.dropzone input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
 .drop-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; background: #e7f1fa; color: var(--primary); font-size: 24px; font-weight: 700; }
 .dropzone span { max-width: 500px; color: var(--muted); font-size: 13px; line-height: 1.5; }
-.selected-file { min-height: 22px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.selected-card { display: flex; justify-content: space-between; align-items: center; gap: 18px; border: 1px solid #cbd9e7; background: #f8fbfe; border-radius: 10px; padding: 14px 16px; }
+.selected-card > div { min-width: 0; display: grid; gap: 4px; }
+.selected-card strong { overflow-wrap: anywhere; }
+.selected-card small { color: var(--muted); }
+.selected-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 800; }
+.upload-state { flex: 0 0 auto; display: inline-flex; align-items: center; border-radius: 999px; padding: 6px 10px; background: #e7f1fa; color: #0c5a96; font-size: 12px; font-weight: 800; }
+.upload-progress { border: 1px solid #cee0f0; background: #f3f8fd; border-radius: 10px; padding: 15px 16px; }
+.progress-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 10px; font-size: 13px; }
+.progress-row span { color: var(--primary); font-weight: 800; }
+.progress-track { height: 9px; overflow: hidden; background: #dce8f2; border-radius: 999px; }
+.progress-bar { width: 0; height: 100%; background: var(--primary); border-radius: inherit; transition: width .15s ease; }
+.upload-progress p { margin: 9px 0 0; font-size: 12px; }
 .button { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 8px 14px; border: 1px solid transparent; border-radius: 8px; font-weight: 700; cursor: pointer; }
 .button:hover { text-decoration: none; }
+.button:disabled { opacity: .62; cursor: wait; }
 .button.primary { background: var(--primary); color: #fff; }
 .button.primary:hover { background: var(--primary-dark); }
 .button.secondary { background: #fff; color: var(--text); border-color: var(--line); }
@@ -139,6 +151,7 @@ tbody tr:last-child td { border-bottom: none; }
     .flash-stack { padding: 12px 18px 0; }
     .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .metadata-grid, .download-grid { grid-template-columns: 1fr; }
+    .selected-card { align-items: flex-start; flex-direction: column; }
     .pipeline { flex-direction: column; padding: 10px 0; }
     .pipeline-arrow { transform: rotate(90deg); }
     .setting-row { grid-template-columns: 1fr; gap: 6px; }
