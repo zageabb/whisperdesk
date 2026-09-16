@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+whisper-env/
+
+# Environment
+.env
+
+# Runtime data
+instance/
+data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
