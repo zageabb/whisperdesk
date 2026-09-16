@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}WhisperDesk{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-mark">W</div>
+            <div>
+                <div class="brand-name">WhisperDesk</div>
+                <div class="brand-version">v{{ app_version }}</div>
+            </div>
+        </div>
+
+        <nav class="nav">
+            <a class="nav-link {% if request.endpoint == 'web.index' %}active{% endif %}" href="{{ url_for('web.index') }}">Dashboard</a>
+            <a class="nav-link {% if request.endpoint in ['web.jobs', 'web.job_detail'] %}active{% endif %}" href="{{ url_for('web.jobs') }}">Transcriptions</a>
+            <a class="nav-link {% if request.endpoint == 'web.settings' %}active{% endif %}" href="{{ url_for('web.settings') }}">Settings</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="status-dot-row"><span class="status-dot"></span> Local processing</div>
+            <div class="muted small">Faster-Whisper + Flask</div>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <div>
+                <h1>{% block heading %}WhisperDesk{% endblock %}</h1>
+                <div class="subtitle">{% block subtitle %}Local speech transcription workspace{% endblock %}</div>
+            </div>
+            {% block topbar_actions %}{% endblock %}
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-stack">
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <section class="content">
+            {% block content %}{% endblock %}
+        </section>
+    </main>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>
