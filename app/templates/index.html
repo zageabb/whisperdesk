@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard · WhisperDesk{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% block subtitle %}Upload audio or video and turn it into a downloadable transcript.{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+    <div class="stat-card"><span>Queued</span><strong>{{ counts.queued }}</strong></div>
+    <div class="stat-card"><span>Processing</span><strong>{{ counts.processing }}</strong></div>
+    <div class="stat-card"><span>Completed</span><strong>{{ counts.completed }}</strong></div>
+    <div class="stat-card"><span>Failed</span><strong>{{ counts.failed }}</strong></div>
+</div>
+
+<div class="two-column">
+    <section class="panel upload-panel">
+        <div class="panel-heading">
+            <div>
+                <h2>New transcription</h2>
+                <p>Files stay on this server and are processed locally by Faster-Whisper.</p>
+            </div>
+        </div>
+        <form method="post" action="{{ url_for('web.upload') }}" enctype="multipart/form-data" class="upload-form">
+            <label class="dropzone" for="file-input">
+                <div class="drop-icon">↑</div>
+                <strong>Select an audio or video file</strong>
+                <span>MP3, WAV, M4A, MP4, MOV, MKV, WebM, FLAC, OGG and more</span>
+                <input id="file-input" name="file" type="file" required>
+            </label>
+            <div id="selected-file" class="selected-file">No file selected</div>
+            <button class="button primary" type="submit">Upload and transcribe</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <h2>How it works</h2>
+                <p>A simple local-first transcription pipeline.</p>
+            </div>
+        </div>
+        <div class="pipeline">
+            <div><span>1</span><strong>Upload</strong><small>Audio or video file</small></div>
+            <div class="pipeline-arrow">→</div>
+            <div><span>2</span><strong>Whisper</strong><small>Local speech recognition</small></div>
+            <div class="pipeline-arrow">→</div>
+            <div><span>3</span><strong>Download</strong><small>Plain or timestamped TXT</small></div>
+        </div>
+    </section>
+</div>
+
+<section class="panel">
+    <div class="panel-heading row-between">
+        <div>
+            <h2>Recent transcriptions</h2>
+            <p>Your latest jobs on this server.</p>
+        </div>
+        <a class="button secondary" href="{{ url_for('web.jobs') }}">View all</a>
+    </div>
+    {% if jobs %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>File</th><th>Status</th><th>Language</th><th>Model</th><th>Created</th><th></th></tr></thead>
+            <tbody>
+            {% for job in jobs %}
+                <tr>
+                    <td class="file-cell">{{ job.original_name }}</td>
+                    <td><span class="badge {{ job.status }}">{{ job.status }}</span></td>
+                    <td>{{ job.language or '—' }}</td>
+                    <td>{{ job.model }}</td>
+                    <td>{{ job.created_at[:19].replace('T', ' ') }}</td>
+                    <td><a href="{{ url_for('web.job_detail', job_id=job.id) }}">Open</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <div class="empty-state">No transcriptions yet. Upload your first recording above.</div>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const input = document.getElementById('file-input');
+const selected = document.getElementById('selected-file');
+input?.addEventListener('change', () => {
+    selected.textContent = input.files.length ? input.files[0].name : 'No file selected';
+});
+</script>
+{% endblock %}
