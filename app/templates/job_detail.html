@@ -110,7 +110,7 @@ function applyJob(job) {
 async function updateSegments() {
     if (status !== 'processing') return;
     try {
-        const response = await fetch(`/api/jobs/${jobId}/segments`, {cache: 'no-store'});
+        const response = await fetch(new URL(`api/jobs/${jobId}/segments`, document.baseURI), {cache: 'no-store'});
         if (!response.ok) return;
         const payload = await response.json();
         if (payload.segments.length) {
@@ -124,7 +124,7 @@ async function updateSegments() {
 async function poll() {
     if (!['queued', 'processing'].includes(status)) return;
     try {
-        const response = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
+        const response = await fetch(new URL(`api/jobs/${jobId}`, document.baseURI), {cache: 'no-store'});
         if (response.ok) {
             applyJob(await response.json());
             await updateSegments();
