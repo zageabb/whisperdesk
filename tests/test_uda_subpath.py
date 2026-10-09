@@ -1,6 +1,17 @@
 """UDA and LAN smoke tests without invoking transcription."""
 import io
-from tests.test_app import make_app
+from app import create_app
+
+def make_app(tmp_path):
+    data_dir = tmp_path / "data"
+    return create_app({
+        "TESTING": True,
+        "START_TRANSCRIPTION_WORKER": False,
+        "DATA_DIR": data_dir,
+        "UPLOAD_DIR": data_dir / "uploads",
+        "TRANSCRIPT_DIR": data_dir / "transcripts",
+        "DATABASE_PATH": data_dir / "whisperdesk.db",
+    })
 
 def test_uda_prefix_and_upload(tmp_path):
     app=make_app(tmp_path)
