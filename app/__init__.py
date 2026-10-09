@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from flask import Flask, flash, jsonify, redirect, request, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import db
 from .config import Config
@@ -16,6 +17,8 @@ __version__ = "0.2.0"
 
 def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__)
+    # Trust one isolated UDA/Caddy forwarding hop only.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_prefix=1)
     app.config.from_object(Config)
     app.config["APP_VERSION"] = __version__
 
