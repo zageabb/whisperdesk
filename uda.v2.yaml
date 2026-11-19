@@ -1,0 +1,42 @@
+# V2 review candidate; no activation authority
+schema_version: 2
+application:
+  name: whisperdesk
+  kind: web
+  display_name: "WhisperDesk"
+  group: "TAIJU - Development"
+source:
+  branch: main
+  repository: "zageabb/whisperdesk"
+builds:
+  - name: build
+    toolchain: python
+    working_dir: "."
+    commands:
+      - ["python","-m","pip","install","-r","requirements.txt"]
+services:
+  - name: web
+    role: web
+    runtime: python
+    runtime_version: "3.10.12"
+    working_dir: "."
+    entrypoint: ["gunicorn","--workers","1","--threads","4","--timeout","120","--bind","0.0.0.0:5084","run:app"]
+    port: 5084
+    health:
+      type: http
+      path: "/health"
+    restart: on-failure
+    required_builds: [build]
+proxy:
+  enabled: true
+  upstream: web
+  canonical_path: /apps/whisperdesk/
+  authentication: uda
+environment:
+  required: ["LOG_LEVEL","MAX_UPLOAD_MB","SECRET_KEY","WHISPERDESK_DATA_DIR","WHISPER_BEAM_SIZE","WHISPER_COMPUTE_TYPE","WHISPER_DEVICE","WHISPER_MODEL","WHISPER_VAD_FILTER","WHISPER_WORD_TIMESTAMPS"]
+deployment:
+  strategy: systemd
+  approval: explicit
+  auto_update: false
+  rollback: true
+  github_reporting: false
